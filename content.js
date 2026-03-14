@@ -1444,6 +1444,55 @@
       return "";
     }
 
+    // Captions sometimes "reflow" or slightly rewrite the same sentence (line breaks, punctuation),
+    // which can cause repeated words. Try to speak only the truly new suffix by detecting overlaps.
+    if (prev && ageMs < 3000) {
+      // If the new caption is mostly contained in the previous one, treat it as a reflow (do not re-speak).
+      const sp = softNormalizeForDedupe(prev);
+      const sc = softNormalizeForDedupe(cur);
+      if (sc && sp && sp.includes(sc) && sc.length >= Math.min(sp.length, 18)) return "";
+
+      const splitWords = (s) => safeText(s).split(" ").filter(Boolean);
+      const prevWords = splitWords(prev);
+      const curWords = splitWords(cur);
+      if (prevWords.length && curWords.length) {
+        const tokenKey = (w) => {
+          const t = String(w || "").toLowerCase();
+          try {
+            return t.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+          } catch {
+            return t.replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, "");
+          }
+        };
+        const p = prevWords.map(tokenKey).filter(Boolean);
+        const c = curWords.map(tokenKey).filter(Boolean);
+        if (p.length >= 2 && c.length >= 2) {
+          // Find the largest k where prev tail matches cur head (word-level).
+          const maxK = Math.min(p.length, c.length, 10);
+          let bestK = 0;
+          for (let k = maxK; k >= 2; k -= 1) {
+            let ok = true;
+            for (let i = 0; i < k; i += 1) {
+              if (p[p.length - k + i] !== c[i]) {
+                ok = false;
+                break;
+              }
+            }
+            if (ok) {
+              bestK = k;
+              break;
+            }
+          }
+          if (bestK > 0) {
+            const remainder = _stripLeadingJunk(curWords.slice(bestK).join(" "));
+            const meaningful = /[^\s.,!?;:，。！？；：、\-–—"“”'‘’()\[\]{}]/.test(remainder);
+            if (meaningful) return remainder;
+            return "";
+          }
+        }
+      }
+    }
+
     return cur;
   }
 
@@ -1492,6 +1541,22 @@
     const last = state.speakQueue[state.speakQueue.length - 1];
     if (last && normalizeCaptionKey(last.text) === norm) return;
     if (last && fullNorm && normalizeCaptionKey(last.opts?.fullCaptionNorm || "") === fullNorm) return;
+
+    // Extra short-segment dedupe: prevent "word stutter" when caption sources briefly rewrite the same token.
+    // Only applies to very short segments and only over a short time window.
+    try {
+      const tiny = softNormalizeForDedupe(norm);
+      const words = tiny ? tiny.split(" ").filter(Boolean) : [];
+      const isTiny = norm.length <= 14 || words.length <= 2;
+      if (isTiny && tiny) {
+        const lastTinyAt = state.recentCaptionTextAt.get(`spoken:${tiny}`) || 0;
+        if (now - lastTinyAt < 2600) return;
+        state.recentCaptionTextAt.set(`spoken:${tiny}`, now);
+      }
+    } catch {
+      // ignore
+    }
+
     state.speakQueue.push({ text: cleaned, opts: { ...(opts || {}) }, failCount: 0 });
     // Keep queue small to avoid falling far behind, but don't drop everything (skips).
     while (state.speakQueue.length > 3) state.speakQueue.shift();

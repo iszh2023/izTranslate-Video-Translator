@@ -2,7 +2,9 @@
 
 (() => {
   if (window.top !== window) return; // only top frame
-  if (window.__iTranslateInjected) return;
+  if (window.__izTranslateInjected || window.__iTranslateInjected) return;
+  // Keep the old key set too so upgrades don't temporarily allow double-injection on already-open tabs.
+  window.__izTranslateInjected = true;
   window.__iTranslateInjected = true;
 
   const DEFAULTS = {

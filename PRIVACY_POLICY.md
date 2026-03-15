@@ -1,9 +1,9 @@
-iTranslate Video Translator Privacy Policy
+izTranslate Video Translator Privacy Policy
 
 Last updated: 2026-03-15
 
 Summary
-- iTranslate Video Translator helps you read video captions/subtitles and optionally speaks them aloud using your browser’s built-in text-to-speech.
+- izTranslate Video Translator helps you read video captions/subtitles and optionally speaks them aloud using your browser’s built-in text-to-speech.
 
 Data we collect
 - We do not collect, sell, or share personal data.
